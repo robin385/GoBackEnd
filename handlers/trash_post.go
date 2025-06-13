@@ -8,7 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/disintegration/imaging"
 	"gobackend/models"
@@ -26,11 +29,44 @@ func NewTrashPostHandler(repo *models.TrashPostRepository, userRepo *models.User
 	return &TrashPostHandler{repo: repo, userRepo: userRepo}
 }
 
+// getUserIDFromToken extracts the user ID from the Authorization header JWT
+func getUserIDFromToken(c *gin.Context) (int, error) {
+	header := c.GetHeader("Authorization")
+	if header == "" {
+		return 0, fmt.Errorf("authorization header missing")
+	}
+
+	parts := strings.SplitN(header, " ", 2)
+	tokenString := header
+	if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+		tokenString = parts[1]
+	}
+
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil || !token.Valid {
+		return 0, fmt.Errorf("invalid token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, fmt.Errorf("invalid claims")
+	}
+	idVal, ok := claims["user_id"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("user_id missing in token")
+	}
+	return int(idVal), nil
+}
+
 // CreateTrashPost adds a new trash post
 func (h *TrashPostHandler) CreateTrashPost(c *gin.Context) {
-	userID, err := strconv.Atoi(c.PostForm("user_id"))
+	userID, err := getUserIDFromToken(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
