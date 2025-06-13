@@ -48,39 +48,40 @@ func Initialize(dbPath string) (*DB, error) {
 func (db *DB) migrate() error {
 	// Create users table
 	createUsersTable := `
-	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL,
-		email TEXT UNIQUE NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);`
+        CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                is_admin BOOLEAN NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );`
 
 	if _, err := db.Exec(createUsersTable); err != nil {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
 
-	// Create posts table
-	createPostsTable := `
-	CREATE TABLE IF NOT EXISTS posts (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		title TEXT NOT NULL,
-		content TEXT NOT NULL,
-		user_id INTEGER NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);`
+	// Create trash_posts table
+	createTrashTable := `
+        CREATE TABLE IF NOT EXISTS trash_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                location TEXT NOT NULL,
+                description TEXT NOT NULL,
+                trail TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );`
 
-	if _, err := db.Exec(createPostsTable); err != nil {
-		return fmt.Errorf("failed to create posts table: %w", err)
+	if _, err := db.Exec(createTrashTable); err != nil {
+		return fmt.Errorf("failed to create trash_posts table: %w", err)
 	}
 
 	// Create indexes
 	createIndexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);",
-		"CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);",
-		"CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at);",
+		"CREATE INDEX IF NOT EXISTS idx_trash_user_id ON trash_posts(user_id);",
+		"CREATE INDEX IF NOT EXISTS idx_trash_created_at ON trash_posts(created_at);",
 	}
 
 	for _, query := range createIndexes {
