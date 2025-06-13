@@ -10,6 +10,7 @@ type User struct {
 	ID        int       `json:"id" db:"id"`
 	Name      string    `json:"name" db:"name"`
 	Email     string    `json:"email" db:"email"`
+	IsAdmin   bool      `json:"is_admin" db:"is_admin"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -38,11 +39,11 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 // Create creates a new user
 func (r *UserRepository) Create(user *User) error {
 	query := `
-		INSERT INTO users (name, email) 
-		VALUES (?, ?) 
-		RETURNING id, created_at, updated_at`
-	
-	err := r.db.QueryRow(query, user.Name, user.Email).Scan(
+                INSERT INTO users (name, email, is_admin)
+                VALUES (?, ?, ?)
+                RETURNING id, created_at, updated_at`
+
+	err := r.db.QueryRow(query, user.Name, user.Email, user.IsAdmin).Scan(
 		&user.ID, &user.CreatedAt, &user.UpdatedAt)
 	return err
 }
@@ -50,11 +51,11 @@ func (r *UserRepository) Create(user *User) error {
 // GetByID retrieves a user by ID
 func (r *UserRepository) GetByID(id int) (*User, error) {
 	user := &User{}
-	query := `SELECT id, name, email, created_at, updated_at FROM users WHERE id = ?`
-	
+	query := `SELECT id, name, email, is_admin, created_at, updated_at FROM users WHERE id = ?`
+
 	err := r.db.QueryRow(query, id).Scan(
-		&user.ID, &user.Name, &user.Email, &user.CreatedAt, &user.UpdatedAt)
-	
+		&user.ID, &user.Name, &user.Email, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -63,8 +64,8 @@ func (r *UserRepository) GetByID(id int) (*User, error) {
 
 // GetAll retrieves all users
 func (r *UserRepository) GetAll() ([]*User, error) {
-	query := `SELECT id, name, email, created_at, updated_at FROM users ORDER BY created_at DESC`
-	
+	query := `SELECT id, name, email, is_admin, created_at, updated_at FROM users ORDER BY created_at DESC`
+
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -74,7 +75,7 @@ func (r *UserRepository) GetAll() ([]*User, error) {
 	var users []*User
 	for rows.Next() {
 		user := &User{}
-		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -86,11 +87,11 @@ func (r *UserRepository) GetAll() ([]*User, error) {
 // Update updates a user
 func (r *UserRepository) Update(user *User) error {
 	query := `
-		UPDATE users 
-		SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP 
-		WHERE id = ?`
-	
-	_, err := r.db.Exec(query, user.Name, user.Email, user.ID)
+                UPDATE users
+                SET name = ?, email = ?, is_admin = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?`
+
+	_, err := r.db.Exec(query, user.Name, user.Email, user.IsAdmin, user.ID)
 	return err
 }
 
