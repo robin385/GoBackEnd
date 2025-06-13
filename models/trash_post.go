@@ -32,9 +32,20 @@ func NewTrashPostRepository(db *sql.DB) *TrashPostRepository {
 func (r *TrashPostRepository) Create(post *TrashPost) error {
 	query := `
        INSERT INTO trash_posts (user_id, latitude, longitude, image_path, description, trail)
-       VALUES (?, ?, ?, ?, ?, ?)
-       RETURNING id, created_at`
-	return r.db.QueryRow(query, post.UserID, post.Latitude, post.Longitude, post.ImagePath, post.Description, post.Trail).Scan(&post.ID, &post.CreatedAt)
+       VALUES (?, ?, ?, ?, ?, ?)`
+
+	res, err := r.db.Exec(query, post.UserID, post.Latitude, post.Longitude, post.ImagePath, post.Description, post.Trail)
+	if err != nil {
+		return err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	post.ID = int(id)
+	return r.db.QueryRow(`SELECT created_at FROM trash_posts WHERE id = ?`, post.ID).Scan(&post.CreatedAt)
 }
 
 // GetByDateRange returns all trash posts between start and end dates inclusive
