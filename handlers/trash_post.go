@@ -1,10 +1,16 @@
 package handlers
 
 import (
+	"fmt"
+	"image/jpeg"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/disintegration/imaging"
 	"gobackend/models"
 
 	"github.com/gin-gonic/gin"
@@ -22,10 +28,41 @@ func NewTrashPostHandler(repo *models.TrashPostRepository, userRepo *models.User
 
 // CreateTrashPost adds a new trash post
 func (h *TrashPostHandler) CreateTrashPost(c *gin.Context) {
-	var post models.TrashPost
-	if err := c.ShouldBindJSON(&post); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	userID, err := strconv.Atoi(c.PostForm("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
+	}
+
+	lat, err := strconv.ParseFloat(c.PostForm("latitude"), 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid latitude"})
+		return
+	}
+
+	lon, err := strconv.ParseFloat(c.PostForm("longitude"), 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid longitude"})
+		return
+	}
+
+	post := models.TrashPost{
+		UserID:      userID,
+		Latitude:    lat,
+		Longitude:   lon,
+		Description: c.PostForm("description"),
+		Trail:       c.PostForm("trail"),
+	}
+
+	// Handle optional image
+	file, err := c.FormFile("image")
+	if err == nil {
+		if path, err := saveCompressedImage(file); err == nil {
+			post.ImagePath = path
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	user, err := h.userRepo.GetByID(post.UserID)
@@ -97,4 +134,38 @@ func (h *TrashPostHandler) DeleteTrashPost(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+}
+
+func saveCompressedImage(file *multipart.FileHeader) (string, error) {
+	f, err := file.Open()
+	if err != nil {
+		return "", fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	img, err := imaging.Decode(f)
+	if err != nil {
+		return "", fmt.Errorf("decode image: %w", err)
+	}
+
+	// Resize to 1080x1920 keeping aspect ratio by filling
+	resized := imaging.Fill(img, 1080, 1920, imaging.Center, imaging.Lanczos)
+
+	if err := os.MkdirAll("uploads", 0755); err != nil {
+		return "", fmt.Errorf("create dir: %w", err)
+	}
+
+	filename := fmt.Sprintf("%d.jpg", time.Now().UnixNano())
+	path := filepath.Join("uploads", filename)
+	out, err := os.Create(path)
+	if err != nil {
+		return "", fmt.Errorf("create file: %w", err)
+	}
+	defer out.Close()
+
+	if err := jpeg.Encode(out, resized, &jpeg.Options{Quality: 75}); err != nil {
+		return "", fmt.Errorf("encode jpeg: %w", err)
+	}
+
+	return path, nil
 }

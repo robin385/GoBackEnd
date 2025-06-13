@@ -63,15 +63,17 @@ func (db *DB) migrate() error {
 
 	// Create trash_posts table
 	createTrashTable := `
-        CREATE TABLE IF NOT EXISTS trash_posts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                location TEXT NOT NULL,
-                description TEXT NOT NULL,
-                trail TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );`
+       CREATE TABLE IF NOT EXISTS trash_posts (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               user_id INTEGER NOT NULL,
+               latitude REAL NOT NULL,
+               longitude REAL NOT NULL,
+               image_path TEXT,
+               description TEXT NOT NULL,
+               trail TEXT,
+               created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+               FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+       );`
 
 	if _, err := db.Exec(createTrashTable); err != nil {
 		return fmt.Errorf("failed to create trash_posts table: %w", err)
