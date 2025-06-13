@@ -3,16 +3,34 @@ package models
 import (
 	"database/sql"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // User represents a user in the system
 type User struct {
-	ID        int       `json:"id" db:"id"`
-	Name      string    `json:"name" db:"name"`
-	Email     string    `json:"email" db:"email"`
-	IsAdmin   bool      `json:"is_admin" db:"is_admin"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID           int       `json:"id" db:"id"`
+	Name         string    `json:"name" db:"name"`
+	Email        string    `json:"email" db:"email"`
+	PasswordHash string    `json:"-" db:"password"`
+	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// SetPassword hashes and sets the password for the user
+func (u *User) SetPassword(pw string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = string(hash)
+	return nil
+}
+
+// CheckPassword verifies the given password against the stored hash
+func (u *User) CheckPassword(pw string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(pw)) == nil
 }
 
 // Post represents a post in the system
@@ -39,11 +57,11 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 // Create creates a new user
 func (r *UserRepository) Create(user *User) error {
 	query := `
-                INSERT INTO users (name, email, is_admin)
-                VALUES (?, ?, ?)
-                RETURNING id, created_at, updated_at`
+               INSERT INTO users (name, email, password, is_admin)
+               VALUES (?, ?, ?, ?)
+               RETURNING id, created_at, updated_at`
 
-	err := r.db.QueryRow(query, user.Name, user.Email, user.IsAdmin).Scan(
+	err := r.db.QueryRow(query, user.Name, user.Email, user.PasswordHash, user.IsAdmin).Scan(
 		&user.ID, &user.CreatedAt, &user.UpdatedAt)
 	return err
 }
@@ -51,10 +69,24 @@ func (r *UserRepository) Create(user *User) error {
 // GetByID retrieves a user by ID
 func (r *UserRepository) GetByID(id int) (*User, error) {
 	user := &User{}
-	query := `SELECT id, name, email, is_admin, created_at, updated_at FROM users WHERE id = ?`
+	query := `SELECT id, name, email, password, is_admin, created_at, updated_at FROM users WHERE id = ?`
 
 	err := r.db.QueryRow(query, id).Scan(
-		&user.ID, &user.Name, &user.Email, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return user, err
+}
+
+// GetByEmail retrieves a user by email
+func (r *UserRepository) GetByEmail(email string) (*User, error) {
+	user := &User{}
+	query := `SELECT id, name, email, password, is_admin, created_at, updated_at FROM users WHERE email = ?`
+
+	err := r.db.QueryRow(query, email).Scan(
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -64,7 +96,7 @@ func (r *UserRepository) GetByID(id int) (*User, error) {
 
 // GetAll retrieves all users
 func (r *UserRepository) GetAll() ([]*User, error) {
-	query := `SELECT id, name, email, is_admin, created_at, updated_at FROM users ORDER BY created_at DESC`
+	query := `SELECT id, name, email, password, is_admin, created_at, updated_at FROM users ORDER BY created_at DESC`
 
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -75,7 +107,7 @@ func (r *UserRepository) GetAll() ([]*User, error) {
 	var users []*User
 	for rows.Next() {
 		user := &User{}
-		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -87,11 +119,11 @@ func (r *UserRepository) GetAll() ([]*User, error) {
 // Update updates a user
 func (r *UserRepository) Update(user *User) error {
 	query := `
-                UPDATE users
-                SET name = ?, email = ?, is_admin = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?`
+               UPDATE users
+               SET name = ?, email = ?, password = ?, is_admin = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?`
 
-	_, err := r.db.Exec(query, user.Name, user.Email, user.IsAdmin, user.ID)
+	_, err := r.db.Exec(query, user.Name, user.Email, user.PasswordHash, user.IsAdmin, user.ID)
 	return err
 }
 
