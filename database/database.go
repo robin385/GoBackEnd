@@ -52,6 +52,7 @@ func (db *DB) migrate() error {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
                 is_admin BOOLEAN NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -59,6 +60,17 @@ func (db *DB) migrate() error {
 
 	if _, err := db.Exec(createUsersTable); err != nil {
 		return fmt.Errorf("failed to create users table: %w", err)
+	}
+
+	// Ensure password column exists for old installations
+	var col string
+	err := db.QueryRow("SELECT name FROM pragma_table_info('users') WHERE name='password'").Scan(&col)
+	if err == sql.ErrNoRows {
+		if _, err := db.Exec("ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("failed to add password column: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check password column: %w", err)
 	}
 
 	// Create trash_posts table

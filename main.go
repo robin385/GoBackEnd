@@ -32,11 +32,15 @@ func main() {
 
 	userHandler := handlers.NewUserHandler(userRepo)
 	trashHandler := handlers.NewTrashPostHandler(trashRepo, userRepo)
+	oauthHandler := handlers.NewOAuthHandler(userRepo)
 
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
 	r.POST("/users", userHandler.CreateUser)
+	r.POST("/login", userHandler.Login)
+	r.GET("/auth/google/login", oauthHandler.Login)
+	r.GET("/auth/google/callback", oauthHandler.Callback)
 
 	r.POST("/trashposts", trashHandler.CreateTrashPost)
 	r.GET("/trashposts", trashHandler.GetTrashPosts)
