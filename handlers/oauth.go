@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"math/rand"
 	"net/http"
@@ -9,8 +10,8 @@ import (
 
 	"gobackend/models"
 
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/valyala/fasthttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -31,28 +32,28 @@ func NewOAuthHandler(userRepo *models.UserRepository) *OAuthHandler {
 	return &OAuthHandler{config: conf, userRepo: userRepo}
 }
 
-func (h *OAuthHandler) Login(c *gin.Context) {
+func (h *OAuthHandler) Login(ctx *fasthttp.RequestCtx) {
 	url := h.config.AuthCodeURL("state")
-	c.Redirect(http.StatusFound, url)
+	ctx.Redirect(url, http.StatusFound)
 }
 
-func (h *OAuthHandler) Callback(c *gin.Context) {
-	code := c.Query("code")
+func (h *OAuthHandler) Callback(ctx *fasthttp.RequestCtx) {
+	code := string(ctx.QueryArgs().Peek("code"))
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "code required"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "code required"})
 		return
 	}
 
-	token, err := h.config.Exchange(c, code)
+	token, err := h.config.Exchange(context.Background(), code)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token exchange failed"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "token exchange failed"})
 		return
 	}
 
-	client := h.config.Client(c, token)
+	client := h.config.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user info"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to get user info"})
 		return
 	}
 	defer resp.Body.Close()
@@ -62,20 +63,20 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		Name  string `json:"name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "decode user info"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "decode user info"})
 		return
 	}
 
 	user, err := h.userRepo.GetByEmail(info.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "db error"})
 		return
 	}
 	if user == nil {
 		user = &models.User{Name: info.Name, Email: info.Email}
 		_ = user.SetPassword(randomString())
 		if err := h.userRepo.Create(user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "create user"})
+			writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "create user"})
 			return
 		}
 	}
@@ -87,11 +88,11 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	secret := os.Getenv("JWT_SECRET")
 	signed, err := jwtToken.SignedString([]byte(secret))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token sign"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "token sign"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": signed})
+	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"token": signed})
 }
 
 func randomString() string {
