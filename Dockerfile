@@ -1,11 +1,10 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23 AS builder
 
 # Set working directory
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -17,13 +16,17 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=1 GOOS=linux go build -a -o main .
+
 
 # Final stage
-FROM alpine:latest
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates sqlite
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /root/

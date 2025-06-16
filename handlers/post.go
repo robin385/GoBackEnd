@@ -40,6 +40,7 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 		return
 	}
 
+	// Fix: Use h.postRepo instead of h.repo
 	if err := h.postRepo.Create(&post); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
 		return

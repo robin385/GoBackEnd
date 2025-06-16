@@ -41,7 +41,7 @@ func main() {
 	r.POST("/login", userHandler.Login)
 	r.GET("/auth/google/login", oauthHandler.Login)
 	r.GET("/auth/google/callback", oauthHandler.Callback)
-
+	r.Static("/uploads", "./uploads")
 	r.POST("/trashposts", trashHandler.CreateTrashPost)
 	r.GET("/trashposts", trashHandler.GetTrashPosts)
 	r.DELETE("/trashposts/:id", trashHandler.DeleteTrashPost)
