@@ -91,11 +91,29 @@ func (db *DB) migrate() error {
 		return fmt.Errorf("failed to create trash_posts table: %w", err)
 	}
 
+	// Create comments table
+	createCommentsTable := `
+       CREATE TABLE IF NOT EXISTS comments (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               post_id INTEGER NOT NULL,
+               user_id INTEGER NOT NULL,
+               content TEXT NOT NULL,
+               created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+               FOREIGN KEY (post_id) REFERENCES trash_posts(id) ON DELETE CASCADE,
+               FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+       );`
+
+	if _, err := db.Exec(createCommentsTable); err != nil {
+		return fmt.Errorf("failed to create comments table: %w", err)
+	}
+
 	// Create indexes
 	createIndexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);",
 		"CREATE INDEX IF NOT EXISTS idx_trash_user_id ON trash_posts(user_id);",
 		"CREATE INDEX IF NOT EXISTS idx_trash_created_at ON trash_posts(created_at);",
+		"CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);",
+		"CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at);",
 	}
 
 	for _, query := range createIndexes {
