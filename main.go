@@ -30,9 +30,11 @@ func main() {
 
 	userRepo := models.NewUserRepository(db.DB)
 	trashRepo := models.NewTrashPostRepository(db.DB)
+	commentRepo := models.NewCommentRepository(db.DB)
 
 	userHandler := handlers.NewUserHandler(userRepo)
 	trashHandler := handlers.NewTrashPostHandler(trashRepo, userRepo)
+	commentHandler := handlers.NewCommentHandler(commentRepo, userRepo)
 	oauthHandler := handlers.NewOAuthHandler(userRepo)
 
 	r := router.New()
@@ -50,6 +52,8 @@ func main() {
 	r.POST("/trashposts", trashHandler.CreateTrashPost)
 	r.GET("/trashposts", trashHandler.GetTrashPosts)
 	r.DELETE("/trashposts/{id}", trashHandler.DeleteTrashPost)
+	r.POST("/trashposts/{id}/comments", commentHandler.CreateComment)
+	r.GET("/trashposts/{id}/comments", commentHandler.GetComments)
 
 	server := &fasthttp.Server{Handler: r.Handler}
 
