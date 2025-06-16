@@ -2,14 +2,15 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"os"
 
 	"gobackend/database"
 	"gobackend/handlers"
 	"gobackend/models"
 
-	"github.com/gin-gonic/gin"
+	"github.com/fasthttp/router"
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/prefork"
 )
 
 func main() {
@@ -34,19 +35,25 @@ func main() {
 	trashHandler := handlers.NewTrashPostHandler(trashRepo, userRepo)
 	oauthHandler := handlers.NewOAuthHandler(userRepo)
 
-	r := gin.Default()
-	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	r := router.New()
+	r.GET("/health", func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.Header.Set("Content-Type", "application/json")
+		ctx.SetStatusCode(fasthttp.StatusOK)
+		ctx.Write([]byte(`{"status":"ok"}`))
+	})
 
 	r.POST("/users", userHandler.CreateUser)
 	r.POST("/login", userHandler.Login)
 	r.GET("/auth/google/login", oauthHandler.Login)
 	r.GET("/auth/google/callback", oauthHandler.Callback)
-	r.Static("/uploads", "./uploads")
+	r.ServeFiles("/uploads/{filepath:*}", "./uploads")
 	r.POST("/trashposts", trashHandler.CreateTrashPost)
 	r.GET("/trashposts", trashHandler.GetTrashPosts)
-	r.DELETE("/trashposts/:id", trashHandler.DeleteTrashPost)
+	r.DELETE("/trashposts/{id}", trashHandler.DeleteTrashPost)
 
-	if err := r.Run(":" + port); err != nil {
+	server := &fasthttp.Server{Handler: r.Handler}
+
+	if err := prefork.New(server).ListenAndServe(":" + port); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

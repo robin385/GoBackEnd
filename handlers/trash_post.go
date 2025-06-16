@@ -4,19 +4,17 @@ import (
 	"fmt"
 	"image/jpeg"
 	"mime/multipart"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/disintegration/imaging"
-	"gobackend/models"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/valyala/fasthttp"
 
-	"github.com/gin-gonic/gin"
+	"gobackend/models"
 )
 
 // TrashPostHandler handles trash post endpoints
@@ -29,9 +27,8 @@ func NewTrashPostHandler(repo *models.TrashPostRepository, userRepo *models.User
 	return &TrashPostHandler{repo: repo, userRepo: userRepo}
 }
 
-// getUserIDFromToken extracts the user ID from the Authorization header JWT
-func getUserIDFromToken(c *gin.Context) (int, error) {
-	header := c.GetHeader("Authorization")
+func getUserIDFromToken(ctx *fasthttp.RequestCtx) (int, error) {
+	header := string(ctx.Request.Header.Peek("Authorization"))
 	if header == "" {
 		return 0, fmt.Errorf("authorization header missing")
 	}
@@ -63,22 +60,22 @@ func getUserIDFromToken(c *gin.Context) (int, error) {
 }
 
 // CreateTrashPost adds a new trash post
-func (h *TrashPostHandler) CreateTrashPost(c *gin.Context) {
-	userID, err := getUserIDFromToken(c)
+func (h *TrashPostHandler) CreateTrashPost(ctx *fasthttp.RequestCtx) {
+	userID, err := getUserIDFromToken(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		writeJSON(ctx, fasthttp.StatusUnauthorized, map[string]string{"error": err.Error()})
 		return
 	}
 
-	lat, err := strconv.ParseFloat(c.PostForm("latitude"), 64)
+	lat, err := strconv.ParseFloat(string(ctx.FormValue("latitude")), 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid latitude"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid latitude"})
 		return
 	}
 
-	lon, err := strconv.ParseFloat(c.PostForm("longitude"), 64)
+	lon, err := strconv.ParseFloat(string(ctx.FormValue("longitude")), 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid longitude"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid longitude"})
 		return
 	}
 
@@ -86,90 +83,90 @@ func (h *TrashPostHandler) CreateTrashPost(c *gin.Context) {
 		UserID:      userID,
 		Latitude:    lat,
 		Longitude:   lon,
-		Description: c.PostForm("description"),
-		Trail:       c.PostForm("trail"),
+		Description: string(ctx.FormValue("description")),
+		Trail:       string(ctx.FormValue("trail")),
 	}
 
-	// Handle optional image
-	file, err := c.FormFile("image")
+	file, err := ctx.FormFile("image")
 	if err == nil {
 		if path, err := saveCompressedImage(file); err == nil {
 			post.ImagePath = path
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
 	}
 
 	user, err := h.userRepo.GetByID(post.UserID)
 	if err != nil || user == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid user"})
 		return
 	}
 
 	if err := h.repo.Create(&post); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to create post"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, post)
+	writeJSON(ctx, fasthttp.StatusCreated, post)
 }
 
 // GetTrashPosts returns posts between start and end datetime
-func (h *TrashPostHandler) GetTrashPosts(c *gin.Context) {
-	startStr := c.Query("start")
-	endStr := c.Query("end")
+func (h *TrashPostHandler) GetTrashPosts(ctx *fasthttp.RequestCtx) {
+	startStr := string(ctx.QueryArgs().Peek("start"))
+	endStr := string(ctx.QueryArgs().Peek("end"))
 	if startStr == "" || endStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "start and end required"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "start and end required"})
 		return
 	}
 
 	start, err := time.Parse(time.RFC3339, startStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid start"})
 		return
 	}
 	end, err := time.Parse(time.RFC3339, endStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid end"})
 		return
 	}
 
 	posts, err := h.repo.GetByDateRange(start, end)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get posts"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to get posts"})
 		return
 	}
-	c.JSON(http.StatusOK, posts)
+	writeJSON(ctx, fasthttp.StatusOK, posts)
 }
 
 // DeleteTrashPost deletes a post if user is admin
-func (h *TrashPostHandler) DeleteTrashPost(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+func (h *TrashPostHandler) DeleteTrashPost(ctx *fasthttp.RequestCtx) {
+	idStr := ctx.UserValue("id").(string)
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid id"})
 		return
 	}
-	userID, err := strconv.Atoi(c.Query("userId"))
+	userID, err := strconv.Atoi(string(ctx.QueryArgs().Peek("userId")))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid user"})
 		return
 	}
 	user, err := h.userRepo.GetByID(userID)
 	if err != nil || user == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user"})
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid user"})
 		return
 	}
 	if !user.IsAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin required"})
+		writeJSON(ctx, fasthttp.StatusForbidden, map[string]string{"error": "admin required"})
 		return
 	}
 
 	if err := h.repo.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete post"})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to delete post"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"message": "deleted"})
 }
 
 func saveCompressedImage(file *multipart.FileHeader) (string, error) {
@@ -184,7 +181,6 @@ func saveCompressedImage(file *multipart.FileHeader) (string, error) {
 		return "", fmt.Errorf("decode image: %w", err)
 	}
 
-	// Resize to 1080x1920 keeping aspect ratio by filling
 	resized := imaging.Fill(img, 1080, 1920, imaging.Center, imaging.Lanczos)
 
 	if err := os.MkdirAll("uploads", 0755); err != nil {
