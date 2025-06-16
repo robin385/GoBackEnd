@@ -82,3 +82,25 @@ func (r *TrashPostRepository) Delete(id int) error {
 	_, err := r.db.Exec(`DELETE FROM trash_posts WHERE id = ?`, id)
 	return err
 }
+
+// GetByID retrieves a single trash post
+func (r *TrashPostRepository) GetByID(id int) (*TrashPost, error) {
+	p := &TrashPost{}
+	query := `SELECT id, user_id, latitude, longitude, COALESCE(image_path, ''), description, COALESCE(trail, ''), created_at FROM trash_posts WHERE id = ?`
+	err := r.db.QueryRow(query, id).Scan(&p.ID, &p.UserID, &p.Latitude, &p.Longitude, &p.ImagePath, &p.Description, &p.Trail, &p.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return p, err
+}
+
+// GetOldestWithImage returns the oldest post that has an image
+func (r *TrashPostRepository) GetOldestWithImage() (*TrashPost, error) {
+	p := &TrashPost{}
+	query := `SELECT id, user_id, latitude, longitude, image_path, description, trail, created_at FROM trash_posts WHERE image_path != '' ORDER BY created_at ASC LIMIT 1`
+	err := r.db.QueryRow(query).Scan(&p.ID, &p.UserID, &p.Latitude, &p.Longitude, &p.ImagePath, &p.Description, &p.Trail, &p.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return p, err
+}

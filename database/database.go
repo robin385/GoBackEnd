@@ -54,6 +54,7 @@ func (db *DB) migrate() error {
                 email TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
                 is_admin BOOLEAN NOT NULL DEFAULT 0,
+                exp INTEGER NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );`
@@ -71,6 +72,16 @@ func (db *DB) migrate() error {
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed to check password column: %w", err)
+	}
+
+	// Ensure exp column exists for old installations
+	err = db.QueryRow("SELECT name FROM pragma_table_info('users') WHERE name='exp'").Scan(&col)
+	if err == sql.ErrNoRows {
+		if _, err := db.Exec("ALTER TABLE users ADD COLUMN exp INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("failed to add exp column: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to check exp column: %w", err)
 	}
 
 	// Create trash_posts table

@@ -34,7 +34,7 @@ func main() {
 
 	userHandler := handlers.NewUserHandler(userRepo)
 	trashHandler := handlers.NewTrashPostHandler(trashRepo, userRepo)
-	commentHandler := handlers.NewCommentHandler(commentRepo, userRepo)
+	commentHandler := handlers.NewCommentHandler(commentRepo, userRepo, trashRepo)
 	oauthHandler := handlers.NewOAuthHandler(userRepo)
 
 	r := router.New()
