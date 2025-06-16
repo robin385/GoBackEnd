@@ -108,6 +108,11 @@ func (h *TrashPostHandler) CreateTrashPost(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	// award experience for posting
+	_ = h.userRepo.AddExp(post.UserID, 50)
+
+	h.cleanupUploads()
+
 	writeJSON(ctx, fasthttp.StatusCreated, post)
 }
 
@@ -200,4 +205,32 @@ func saveCompressedImage(file *multipart.FileHeader) (string, error) {
 	}
 
 	return path, nil
+}
+
+func dirSize(path string) int64 {
+	var size int64
+	filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			info, err := d.Info()
+			if err == nil {
+				size += info.Size()
+			}
+		}
+		return nil
+	})
+	return size
+}
+
+func (h *TrashPostHandler) cleanupUploads() {
+	const limit = 100 * 1024 * 1024
+	for dirSize("uploads") > limit {
+		post, err := h.repo.GetOldestWithImage()
+		if err != nil || post == nil {
+			return
+		}
+		if post.ImagePath != "" {
+			_ = os.Remove(post.ImagePath)
+		}
+		_ = h.repo.Delete(post.ID)
+	}
 }

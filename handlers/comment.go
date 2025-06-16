@@ -12,10 +12,11 @@ import (
 type CommentHandler struct {
 	repo     *models.CommentRepository
 	userRepo *models.UserRepository
+	postRepo *models.TrashPostRepository
 }
 
-func NewCommentHandler(repo *models.CommentRepository, userRepo *models.UserRepository) *CommentHandler {
-	return &CommentHandler{repo: repo, userRepo: userRepo}
+func NewCommentHandler(repo *models.CommentRepository, userRepo *models.UserRepository, postRepo *models.TrashPostRepository) *CommentHandler {
+	return &CommentHandler{repo: repo, userRepo: userRepo, postRepo: postRepo}
 }
 
 // createCommentRequest represents the payload for creating a comment
@@ -50,11 +51,20 @@ func (h *CommentHandler) CreateComment(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	post, err := h.postRepo.GetByID(postID)
+	if err != nil || post == nil {
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "invalid post"})
+		return
+	}
+
 	c := models.Comment{PostID: postID, UserID: userID, Content: req.Content, User: user}
 	if err := h.repo.Create(&c); err != nil {
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to create comment"})
 		return
 	}
+
+	_ = h.userRepo.AddExp(userID, 10)
+	_ = h.userRepo.AddExp(post.UserID, 10)
 
 	writeJSON(ctx, fasthttp.StatusCreated, c)
 }
