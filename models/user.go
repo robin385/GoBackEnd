@@ -14,6 +14,7 @@ type User struct {
 	Email        string    `json:"email" db:"email"`
 	PasswordHash string    `json:"-" db:"password"`
 	IsAdmin      bool      `json:"is_admin" db:"is_admin"`
+	Exp          int       `json:"exp" db:"exp"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -59,20 +60,20 @@ func (r *UserRepository) Create(user *User) error {
 	query := `
                INSERT INTO users (name, email, password, is_admin)
                VALUES (?, ?, ?, ?)
-               RETURNING id, created_at, updated_at`
+               RETURNING id, exp, created_at, updated_at`
 
 	err := r.db.QueryRow(query, user.Name, user.Email, user.PasswordHash, user.IsAdmin).Scan(
-		&user.ID, &user.CreatedAt, &user.UpdatedAt)
+		&user.ID, &user.Exp, &user.CreatedAt, &user.UpdatedAt)
 	return err
 }
 
 // GetByID retrieves a user by ID
 func (r *UserRepository) GetByID(id int) (*User, error) {
 	user := &User{}
-	query := `SELECT id, name, email, password, is_admin, created_at, updated_at FROM users WHERE id = ?`
+	query := `SELECT id, name, email, password, is_admin, exp, created_at, updated_at FROM users WHERE id = ?`
 
 	err := r.db.QueryRow(query, id).Scan(
-		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.Exp, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -83,10 +84,10 @@ func (r *UserRepository) GetByID(id int) (*User, error) {
 // GetByEmail retrieves a user by email
 func (r *UserRepository) GetByEmail(email string) (*User, error) {
 	user := &User{}
-	query := `SELECT id, name, email, password, is_admin, created_at, updated_at FROM users WHERE email = ?`
+	query := `SELECT id, name, email, password, is_admin, exp, created_at, updated_at FROM users WHERE email = ?`
 
 	err := r.db.QueryRow(query, email).Scan(
-		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.Exp, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -96,7 +97,7 @@ func (r *UserRepository) GetByEmail(email string) (*User, error) {
 
 // GetAll retrieves all users
 func (r *UserRepository) GetAll() ([]*User, error) {
-	query := `SELECT id, name, email, password, is_admin, created_at, updated_at FROM users ORDER BY created_at DESC`
+	query := `SELECT id, name, email, password, is_admin, exp, created_at, updated_at FROM users ORDER BY created_at DESC`
 
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -107,7 +108,7 @@ func (r *UserRepository) GetAll() ([]*User, error) {
 	var users []*User
 	for rows.Next() {
 		user := &User{}
-		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsAdmin, &user.Exp, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -132,4 +133,46 @@ func (r *UserRepository) Delete(id int) error {
 	query := `DELETE FROM users WHERE id = ?`
 	_, err := r.db.Exec(query, id)
 	return err
+}
+
+// AddExp increments a user's experience points
+func (r *UserRepository) AddExp(userID, amount int) error {
+	_, err := r.db.Exec(`UPDATE users SET exp = exp + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, amount, userID)
+	return err
+}
+
+// GetTopByExp returns users ordered by experience descending limited by count
+func (r *UserRepository) GetTopByExp(limit int) ([]*User, error) {
+	query := `SELECT id, name, email, password, is_admin, exp, created_at, updated_at FROM users ORDER BY exp DESC LIMIT ?`
+	rows, err := r.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*User
+	for rows.Next() {
+		u := &User{}
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.IsAdmin, &u.Exp, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// GetRank returns the ranking (1-based) and exp for a user by id
+func (r *UserRepository) GetRank(userID int) (int, int, error) {
+	var exp int
+	if err := r.db.QueryRow(`SELECT exp FROM users WHERE id = ?`, userID).Scan(&exp); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	var rank int
+	if err := r.db.QueryRow(`SELECT COUNT(*) + 1 FROM users WHERE exp > ?`, exp).Scan(&rank); err != nil {
+		return 0, 0, err
+	}
+	return rank, exp, nil
 }

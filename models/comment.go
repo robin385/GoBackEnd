@@ -38,7 +38,7 @@ func (r *CommentRepository) Create(c *Comment) error {
 func (r *CommentRepository) GetByPostID(postID int) ([]*Comment, error) {
 	query := `
         SELECT c.id, c.post_id, c.user_id, c.content, c.created_at,
-               u.id, u.name, u.email, u.is_admin, u.created_at, u.updated_at
+               u.id, u.name, u.email, u.is_admin, u.exp, u.created_at, u.updated_at
         FROM comments c
         JOIN users u ON c.user_id = u.id
         WHERE c.post_id = ?
@@ -54,7 +54,7 @@ func (r *CommentRepository) GetByPostID(postID int) ([]*Comment, error) {
 		c := &Comment{}
 		u := &User{}
 		if err := rows.Scan(&c.ID, &c.PostID, &c.UserID, &c.Content, &c.CreatedAt,
-			&u.ID, &u.Name, &u.Email, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			&u.ID, &u.Name, &u.Email, &u.IsAdmin, &u.Exp, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		c.User = u

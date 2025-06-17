@@ -34,7 +34,7 @@ func main() {
 
 	userHandler := handlers.NewUserHandler(userRepo)
 	trashHandler := handlers.NewTrashPostHandler(trashRepo, userRepo)
-	commentHandler := handlers.NewCommentHandler(commentRepo, userRepo)
+	commentHandler := handlers.NewCommentHandler(commentRepo, userRepo, trashRepo)
 	oauthHandler := handlers.NewOAuthHandler(userRepo)
 
 	r := router.New()
@@ -46,6 +46,7 @@ func main() {
 
 	r.POST("/users", userHandler.CreateUser)
 	r.POST("/login", userHandler.Login)
+	r.GET("/leaderboard", userHandler.Leaderboard)
 	r.GET("/auth/google/login", oauthHandler.Login)
 	r.GET("/auth/google/callback", oauthHandler.Callback)
 	r.ServeFiles("/uploads/{filepath:*}", "./uploads")
