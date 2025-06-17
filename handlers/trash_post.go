@@ -186,7 +186,7 @@ func saveCompressedImage(file *multipart.FileHeader) (string, error) {
 		return "", fmt.Errorf("decode image: %w", err)
 	}
 
-	resized := imaging.Fill(img, 1080, 1920, imaging.Center, imaging.Lanczos)
+	resized := imaging.Resize(img, 1080, img.Bounds().Dy()*(1080/img.Bounds().Dx()), imaging.Lanczos)
 
 	if err := os.MkdirAll("uploads", 0755); err != nil {
 		return "", fmt.Errorf("create dir: %w", err)
@@ -200,7 +200,7 @@ func saveCompressedImage(file *multipart.FileHeader) (string, error) {
 	}
 	defer out.Close()
 
-	if err := jpeg.Encode(out, resized, &jpeg.Options{Quality: 75}); err != nil {
+	if err := jpeg.Encode(out, resized, &jpeg.Options{Quality: 50}); err != nil {
 		return "", fmt.Errorf("encode jpeg: %w", err)
 	}
 

@@ -141,7 +141,8 @@ func (r *UserRepository) AddExp(userID, amount int) error {
 	return err
 }
 
-// GetTopByExp returns users ordered by experience descending limited by count
+
+// GetTopByExp returns users ordered by experience descendi22ng limited by count
 func (r *UserRepository) GetTopByExp(limit int) ([]*User, error) {
 	query := `SELECT id, name, email, password, is_admin, exp, created_at, updated_at FROM users ORDER BY exp DESC LIMIT ?`
 	rows, err := r.db.Query(query, limit)
