@@ -52,7 +52,7 @@ func (r *TrashPostRepository) Create(post *TrashPost) error {
 func (r *TrashPostRepository) GetByDateRange(start, end time.Time) ([]*TrashPost, error) {
 	query := `
        SELECT tp.id, tp.user_id, tp.latitude, tp.longitude, COALESCE(tp.image_path, ''), tp.description, COALESCE(tp.trail, ''), tp.created_at,
-              u.id, u.name, u.email, u.is_admin, u.created_at, u.updated_at
+              u.id, u.name, u.email, u.is_admin, u.exp, u.created_at, u.updated_at
        FROM trash_posts tp
        JOIN users u ON tp.user_id = u.id
        WHERE tp.created_at BETWEEN ? AND ?
@@ -68,7 +68,7 @@ func (r *TrashPostRepository) GetByDateRange(start, end time.Time) ([]*TrashPost
 	for rows.Next() {
 		p := &TrashPost{}
 		u := &User{}
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Latitude, &p.Longitude, &p.ImagePath, &p.Description, &p.Trail, &p.CreatedAt, &u.ID, &u.Name, &u.Email, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.UserID, &p.Latitude, &p.Longitude, &p.ImagePath, &p.Description, &p.Trail, &p.CreatedAt, &u.ID, &u.Name, &u.Email, &u.IsAdmin, &u.Exp, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		p.User = u

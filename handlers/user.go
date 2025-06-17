@@ -56,7 +56,7 @@ func (h *UserHandler) Login(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"token": signed})
+	writeJSON(ctx, fasthttp.StatusOK, map[string]interface{}{"token": signed, "user": user})
 }
 
 // CreateUser creates a new user
@@ -167,4 +167,28 @@ func (h *UserHandler) DeleteUser(ctx *fasthttp.RequestCtx) {
 	}
 
 	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"message": "User deleted successfully"})
+}
+
+// Leaderboard returns top 50 users by experience and the current user's rank
+func (h *UserHandler) Leaderboard(ctx *fasthttp.RequestCtx) {
+	userID, err := getUserIDFromToken(ctx)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+	users, err := h.userRepo.GetTopByExp(50)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to get leaderboard"})
+		return
+	}
+	rank, exp, err := h.userRepo.GetRank(userID)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "failed to get rank"})
+		return
+	}
+	writeJSON(ctx, fasthttp.StatusOK, map[string]interface{}{
+		"leaderboard": users,
+		"rank":        rank,
+		"exp":         exp,
+	})
 }

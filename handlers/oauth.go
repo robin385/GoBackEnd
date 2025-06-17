@@ -92,7 +92,7 @@ func (h *OAuthHandler) Callback(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"token": signed})
+	writeJSON(ctx, fasthttp.StatusOK, map[string]interface{}{"token": signed, "user": user})
 }
 
 func randomString() string {

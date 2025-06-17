@@ -140,3 +140,40 @@ func (r *UserRepository) AddExp(userID, amount int) error {
 	_, err := r.db.Exec(`UPDATE users SET exp = exp + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, amount, userID)
 	return err
 }
+
+
+// GetTopByExp returns users ordered by experience descendi22ng limited by count
+func (r *UserRepository) GetTopByExp(limit int) ([]*User, error) {
+	query := `SELECT id, name, email, password, is_admin, exp, created_at, updated_at FROM users ORDER BY exp DESC LIMIT ?`
+	rows, err := r.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*User
+	for rows.Next() {
+		u := &User{}
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.IsAdmin, &u.Exp, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// GetRank returns the ranking (1-based) and exp for a user by id
+func (r *UserRepository) GetRank(userID int) (int, int, error) {
+	var exp int
+	if err := r.db.QueryRow(`SELECT exp FROM users WHERE id = ?`, userID).Scan(&exp); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	var rank int
+	if err := r.db.QueryRow(`SELECT COUNT(*) + 1 FROM users WHERE exp > ?`, exp).Scan(&rank); err != nil {
+		return 0, 0, err
+	}
+	return rank, exp, nil
+}
